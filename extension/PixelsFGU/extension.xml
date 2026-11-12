@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<root version="3.0">
+	<properties>
+		<name>Feature: Pixels Dice</name>
+		<version>0.1.0</version>
+		<author>zaibach333</author>
+		<description>Roll physical Pixels smart dice and have the results count in Fantasy Grounds. Requires the PixelsFGU bridge app.</description>
+		<loadorder>60</loadorder>
+		<!-- Any CoreRPG-based ruleset whose rolls go through ActionsManager.roll and
+		     CoreRPG's manual roll window. Tested: 5E. Expected to work: the rest. -->
+		<ruleset><name>CoreRPG</name></ruleset>
+		<ruleset><name>5E</name></ruleset>
+		<ruleset><name>2E</name></ruleset>
+		<ruleset><name>3.5E</name></ruleset>
+		<ruleset><name>4E</name></ruleset>
+		<ruleset><name>PFRPG</name></ruleset>
+		<ruleset><name>PFRPG2</name></ruleset>
+		<ruleset><name>PFRPG2-Legacy</name></ruleset>
+		<ruleset><name>SFRPG</name></ruleset>
+		<ruleset><name>SFRPG2</name></ruleset>
+	</properties>
+	<announcement text="Pixels Dice - type /pixels for status" font="emotefont" />
+	<base>
+		<includefile source="strings/strings_pixels.xml" />
+		<includefile source="xml/manualroll_entry.xml" />
+		<script name="PixelsManager" file="scripts/manager_pixels.lua" />
+	</base>
+</root>

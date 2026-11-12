@@ -1,0 +1,5 @@
+# Build and test tooling (not needed to run the bridge).
+-r requirements.txt
+pyinstaller==6.22.3
+pyinstaller-hooks-contrib==2026.10
+lupa==2.8

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<root>
+	<string name="option_header_pixels">Pixels Dice</string>
+	<string name="option_label_PIXELS_ENABLE">Pixels: Use physical dice</string>
+	<string name="option_label_PIXELS_AUTOSUBMIT">Pixels: Submit when all dice rolled</string>
+	<string name="option_label_PIXELS_DIGITALFILL">Pixels: Auto-roll dice I don't own</string>
+	<string name="option_label_PIXELS_FREEROLL">Pixels: Post unrequested rolls to chat</string>
+	<string name="pixels_tag">PIXELS</string>
+</root>

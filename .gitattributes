@@ -1,0 +1,4 @@
+# Fixed line endings so dist/PixelsFGU.ext is byte-identical on every machine.
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.png binary

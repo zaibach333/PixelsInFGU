@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!-- Layers onto CoreRPG's manual roll entry (and Requested Rolls' layer, if
+     loaded) so we hear about every entry closing: submitted or cancelled. -->
+<root>
+	<windowclass name="manualroll_entry" merge="join">
+		<script file="scripts/manualroll_entry_pixels.lua" />
+	</windowclass>
+</root>

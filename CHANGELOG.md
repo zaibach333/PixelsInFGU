@@ -1,0 +1,17 @@
+# Changelog
+
+## 0.1.0 (unreleased)
+
+First public version.
+
+- Bridge connects to Pixels dice over Bluetooth LE and writes rolls for FGU.
+- Rolls with a die type you own open FGU's manual roll window and fill from your physical dice.
+  Unowned dice are rolled digitally; rolls with no owned dice use FGU's 3D dice.
+- Manual entry is locked while Pixels handles a roll; **Roll** falls back to FGU's 3D dice.
+- Dice FGU is waiting on blink blue.
+- Sleeping dice still count; the roll that wakes a die is read from its advertisement.
+- d100 from a d00 + d10 pair.
+- Works with the Requested Rolls extension.
+- Rulesets: 5E (tested); CoreRPG, 2E, 3.5E, 4E, PFRPG, PFRPG2, PFRPG2-Legacy, SFRPG, SFRPG2
+  (expected to work). The extension switches itself off on rulesets without CoreRPG's roll APIs.
+- Diagnostics: `/pixels`, `/pixels probe`, `/pixels reset`, bridge log file.
