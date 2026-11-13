@@ -3,14 +3,14 @@
 PixelsInFGU runs on your computer next to Fantasy Grounds and talks to your dice over Bluetooth.
 This page lists everything it does, so you can check the claims against the source.
 
-## What the bridge (`PixelsFGU-Bridge.exe`) does
+## What the bridge (`PixelsFGU-Bridge`) does
 
 | Area | Exactly what happens | Source |
 |---|---|---|
 | Bluetooth | Scans for Pixels dice, connects, and sends only these commands: *who are you*, *battery level*, *blink LEDs*. It never changes die settings, profiles or firmware. | `bridge/pixels_bridge.py`, `bridge/pixels_protocol.py` |
 | Finding FGU's folder | Windows: reads one registry value, `HKCU\Software\SmiteWorks\Fantasy Grounds\DataDir`, and writes nothing. macOS/Linux: checks whether FGU's default data folder exists. | `default_data_dir()` |
 | Files | In the FGU data folder only: writes `PixelsFGU_inbox.json` (and a `.tmp` beside it) and `PixelsFGU_bridge.log`; reads `PixelsFGU_outbox.json`. | `bridge/inbox.py`, `bridge/outbox.py` |
-| Keyboard | After a roll, if Fantasy Grounds is the active window, it presses and releases **Shift** for about 60 ms so FGU notices the roll (FGU's scripting has no timer). It reads only whether Shift is already held, and never records or reads other keys. Windows: `keybd_event`, plus a Shift press posted to FGU's window if FGU isn't active. macOS: a CoreGraphics Shift event (this is why it asks for Accessibility permission). Linux: `xdotool keydown/keyup Shift_L`. | `bridge/nudge.py` |
+| Keyboard | After a roll, if Fantasy Grounds is the active window, it presses and releases **Shift** for about 60 ms so FGU notices the roll (FGU's scripting has no timer). It never records or reads other keys; on Windows and macOS it checks only whether Shift is already held. Windows: `keybd_event`, plus a Shift press posted to FGU's window if FGU isn't active. macOS: a CoreGraphics Shift event (this is why it asks for Accessibility permission). Linux: `xdotool keydown/keyup Shift_L`. | `bridge/nudge.py` |
 | Windows/processes | Finds out which app is active, to check that it's FGU. Windows: the active window's process name (and lists top-level windows to find FGU's). macOS: runs `lsappinfo` for the front app's name. Linux: `xdotool getactivewindow getwindowpid` and that process's name under `/proc`. | `bridge/nudge.py` |
 | Network | **None.** No internet access, telemetry or update checks. | (no networking code) |
 | System | Needs no admin rights or `sudo`. Installs nothing, adds no autostart entry and runs no services. Closing it stops everything. | |
@@ -18,7 +18,7 @@ This page lists everything it does, so you can check the claims against the sour
 The macOS build isn't signed or notarized, so Gatekeeper blocks it until you clear the
 quarantine flag. Antivirus tools sometimes flag single-file PyInstaller executables, and the simulated Shift
 key press can look suspicious. If you'd rather not trust a binary, run the bridge from source
-(see the README) or build the `.exe` yourself.
+(see the README) or build it yourself.
 
 ## What the FGU extension (`PixelsFGU.ext`) does
 
@@ -49,6 +49,7 @@ Every release on GitHub is built by GitHub Actions from the tagged source
    gh attestation verify .\PixelsFGU-Bridge.exe --repo zaibach333/PixelsInFGU
    gh attestation verify .\PixelsFGU.ext --repo zaibach333/PixelsInFGU
    ```
+   The same command works for every file on the release, on any platform.
 3. **Rebuild the extension yourself.** `PixelsFGU.ext` is reproducible: check out the release
    tag and run `python tools/package_ext.py`. The SHA-256 it prints must match the release.
 4. **Build the bridge yourself.** Run `tools/build-bridge.ps1` (Windows) or `tools/build-bridge.sh`

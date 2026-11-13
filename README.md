@@ -69,7 +69,9 @@ Every die type is covered by automated tests. Only d20s have been tested with ph
    `-macos-x86_64.zip` for Intel Macs, or `-linux-x86_64.zip`) and
    unzip it. It contains the bridge, the extension and a quick-start guide. (The files are
    also attached separately.) You can check them first: see [SECURITY.md](SECURITY.md).
-2. Copy `PixelsFGU.ext` into your FGU data folder's `extensions` folder.
+2. Copy `PixelsFGU.ext` into your FGU data folder's `extensions` folder. FGU shows the data
+   folder under Settings; the defaults are `%APPDATA%\SmiteWorks\Fantasy Grounds` (Windows),
+   `~/SmiteWorks/Fantasy Grounds` (macOS) and `~/.smiteworks/fgdata` (Linux).
 3. Enable **Feature: Pixels Dice** when loading your campaign.
 4. Pick up your Pixels to wake them, then run the bridge and leave it open: double-click
    `PixelsFGU-Bridge.exe` on Windows, or run `./PixelsFGU-Bridge` in a terminal on macOS/Linux.
@@ -79,7 +81,8 @@ Every die type is covered by automated tests. Only d20s have been tested with ph
 ## Using it
 
 - **FGU must be the active window** when a roll lands. If it isn't, the roll lands as soon
-  as you click back into FGU.
+  as you click back into FGU. If the Shift nudge can't run (see [Requirements](#requirements)),
+  tap Shift in FGU after rolling.
 - Dice that fall asleep still count as yours. The roll that wakes one is read straight from
   its Bluetooth broadcast.
 - **Options → Pixels Dice:** use physical dice, submit automatically, auto-roll dice I don't
@@ -87,7 +90,8 @@ Every die type is covered by automated tests. Only d20s have been tested with ph
 - **Chat commands:** `/pixels` (status, dice, battery), `/pixels probe` (diagnostics),
   `/pixels reset`.
 - **Bridge options:** `--list` (show dice in range), `--names Bob Amy` (only these dice),
-  `--simulate d20 d6` (no dice: type rolls like `d20 17`), `--no-blink`, `--no-nudge`, `-v`.
+  `--simulate d20 d6` (no dice: type rolls like `d20 17`), `--data-dir <folder>` (if FGU's
+  data folder isn't found automatically), `--no-blink`, `--no-nudge`, `-v`.
 - The bridge writes `PixelsFGU_bridge.log` in the FGU data folder, which is useful for bug reports.
 
 ## Run from source
