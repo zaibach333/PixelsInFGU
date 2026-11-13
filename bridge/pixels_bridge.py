@@ -28,7 +28,7 @@ from pathlib import Path
 
 import pixels_protocol as proto
 from inbox import Inbox, fgu_die_type
-from nudge import Nudger
+from nudge import Nudger, test_nudge
 from outbox import OutboxWatcher
 from version import __version__
 
@@ -400,6 +400,8 @@ def main() -> None:
     parser.add_argument("--list", action="store_true", help="scan once, list Pixels in range, and exit")
     parser.add_argument("--names", nargs="*", default=[], help="only use dice whose name contains one of these")
     parser.add_argument("--no-nudge", action="store_true", help="don't tap Shift to wake FGU after a roll")
+    parser.add_argument("--test-nudge", action="store_true",
+                        help="check that the Shift nudge reaches FGU (click into FGU when asked), then exit")
     parser.add_argument("--no-blink", action="store_true", help="don't blink dice FGU is waiting on")
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("--version", action="version", version=f"PixelsFGU bridge {__version__}")
@@ -415,6 +417,8 @@ def main() -> None:
     if args.list:
         asyncio.run(list_dice(8.0))
         return
+    if args.test_nudge:
+        sys.exit(asyncio.run(test_nudge()))
 
     data_dir = args.data_dir or default_data_dir()
     if not data_dir or not Path(data_dir).exists():
