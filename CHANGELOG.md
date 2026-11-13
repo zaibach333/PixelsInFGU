@@ -4,6 +4,12 @@
 
 - The extension can be enabled in any ruleset, not just the listed d20 ones. It switches itself
   off where CoreRPG's roll APIs are missing.
+- macOS Shift nudge: the key event now carries the same flags as a real left-Shift press, and
+  the bridge asks for Accessibility permission itself and starts nudging once it's granted
+  (no restart). Linux likewise picks up `xdotool` once it's installed.
+- New `--test-nudge` option checks the nudge step by step: permission, which app is in front,
+  and one Shift tap you can confirm with `/pixels` (the *wake-ups* count).
+- The bridge log names the front app when it's waiting for FGU, to help diagnose the nudge.
 
 ## 0.2.0
 

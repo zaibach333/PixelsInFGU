@@ -53,6 +53,49 @@ class BackendSelectionTests(unittest.TestCase):
         import asyncio
         asyncio.run(n.run())  # must not loop forever
 
+    def test_waits_for_permission_then_nudges(self):
+        import asyncio
+
+        class FakeBackend:
+            name = "fake"
+            def __init__(self):
+                self.checks = 0
+                self.keys = []
+            def problem(self):
+                self.checks += 1
+                return "not allowed yet" if self.checks < 3 else None
+            def front_app(self): return "FantasyGrounds"
+            def fgu_is_foreground(self): return True
+            def user_holding_shift(self): return False
+            def post_background_nudge(self): return False
+            def shift(self, down): self.keys.append(down)
+
+        fake = FakeBackend()
+        with mock.patch("nudge.make_backend", return_value=fake), \
+                mock.patch("nudge.PROBLEM_RECHECK_SECONDS", 0.01):
+            n = nudge.Nudger()
+            n.interval = 0.01
+            n.request()
+
+            async def go():
+                task = asyncio.create_task(n.run())
+                for _ in range(200):
+                    await asyncio.sleep(0.01)
+                    if fake.keys == [True, False]:
+                        break
+                task.cancel()
+
+            asyncio.run(go())
+        self.assertGreaterEqual(fake.checks, 3)
+        self.assertEqual(fake.keys, [True, False])   # one Shift down + up
+        self.assertFalse(n.pending)
+
+    def test_mac_shift_flags_look_like_left_shift(self):
+        b = nudge.MacBackend
+        down = b.FLAG_NONCOALESCED | b.FLAG_SHIFT | b.FLAG_DEVICE_LSHIFT
+        self.assertEqual(down, 0x00020102)   # what a real left-Shift press reports
+        self.assertEqual(b.KEYCODE_SHIFT, 56)
+
     @unittest.skipUnless(sys.platform == "win32", "Windows API")
     def test_windows_backend_loads(self):
         b = nudge.make_backend("win32")

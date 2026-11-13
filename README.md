@@ -83,7 +83,8 @@ Every die type is covered by automated tests. Only d20s have been tested with ph
 
 - **FGU must be the active window** when a roll lands. If it isn't, the roll lands as soon
   as you click back into FGU. If the Shift nudge can't run (see [Requirements](#requirements)),
-  tap Shift in FGU after rolling.
+  tap Shift in FGU after rolling. If you always have to tap Shift, run the bridge with
+  `--test-nudge` and follow what it prints.
 - Dice that fall asleep still count as yours. The roll that wakes one is read straight from
   its Bluetooth broadcast.
 - **Options → Pixels Dice:** use physical dice, submit automatically, auto-roll dice I don't
@@ -92,7 +93,8 @@ Every die type is covered by automated tests. Only d20s have been tested with ph
   `/pixels reset`.
 - **Bridge options:** `--list` (show dice in range), `--names Bob Amy` (only these dice),
   `--simulate d20 d6` (no dice: type rolls like `d20 17`), `--data-dir <folder>` (if FGU's
-  data folder isn't found automatically), `--no-blink`, `--no-nudge`, `-v`.
+  data folder isn't found automatically), `--test-nudge` (check that the Shift nudge reaches
+  FGU), `--no-blink`, `--no-nudge`, `-v`.
 - The bridge writes `PixelsFGU_bridge.log` in the FGU data folder, which is useful for bug reports.
 
 ## Run from source

@@ -29,6 +29,7 @@ log = logging.getLogger("pixels-bridge")
 
 HOLD_SECONDS = 0.06   # several frames, so FGU sees the key state change
 MANUAL_HINT = "Tap Shift in FGU after rolling to bring the roll in."
+PROBLEM_RECHECK_SECONDS = 5.0
 
 
 def is_fgu_name(name: str) -> bool:
@@ -82,13 +83,16 @@ class WindowsBackend:
         finally:
             self._kernel32.CloseHandle(handle)
 
-    def fgu_is_foreground(self) -> bool:
+    def front_app(self) -> str:
         hwnd = self._user32.GetForegroundWindow()
         if not hwnd:
-            return False
+            return ""
         pid = self._wt.DWORD()
         self._user32.GetWindowThreadProcessId(hwnd, self._ct.byref(pid))
-        return is_fgu_name(self._process_name(pid.value))
+        return self._process_name(pid.value)
+
+    def fgu_is_foreground(self) -> bool:
+        return is_fgu_name(self.front_app())
 
     def find_fgu_window(self):
         """Top-level visible window belonging to FantasyGrounds.exe, or None."""
@@ -133,19 +137,28 @@ class WindowsBackend:
 
 class MacBackend:
     name = "macOS"
-    KEYCODE_SHIFT = 56
+    KEYCODE_SHIFT = 56          # kVK_Shift (left)
     FLAGS_CHANGED = 12          # kCGEventFlagsChanged
     FLAG_SHIFT = 0x00020000     # kCGEventFlagMaskShift
+    # A real left-Shift press also sets the device-dependent left-shift bit and
+    # the non-coalesced bit. Apps (Unity included) can look at these to tell
+    # left from right Shift, so a bare FLAG_SHIFT may be ignored.
+    FLAG_DEVICE_LSHIFT = 0x00000002   # NX_DEVICELSHIFTKEYMASK
+    FLAG_NONCOALESCED = 0x00000100    # kCGEventFlagMaskNonCoalesced
     HID_EVENT_TAP = 0           # kCGHIDEventTap
     COMBINED_STATE = 0          # kCGEventSourceStateCombinedSessionState
+    HID_STATE = 1               # kCGEventSourceStateHIDSystemState
 
     def __init__(self) -> None:
         import ctypes
-        from ctypes import c_bool, c_int32, c_uint16, c_uint32, c_uint64, c_void_p
+        from ctypes import c_bool, c_int32, c_long, c_uint16, c_uint32, c_uint64, c_void_p
 
+        self._ct = ctypes
         self._app = ctypes.CDLL("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices")
         self._cf = ctypes.CDLL("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
-        a = self._app
+        a, cf = self._app, self._cf
+        a.CGEventSourceCreate.restype = c_void_p
+        a.CGEventSourceCreate.argtypes = [c_int32]
         a.CGEventCreateKeyboardEvent.restype = c_void_p
         a.CGEventCreateKeyboardEvent.argtypes = [c_void_p, c_uint16, c_bool]
         a.CGEventSetType.argtypes = [c_void_p, c_uint32]
@@ -154,28 +167,58 @@ class MacBackend:
         a.CGEventSourceFlagsState.restype = c_uint64
         a.CGEventSourceFlagsState.argtypes = [c_int32]
         a.AXIsProcessTrusted.restype = c_bool
-        self._cf.CFRelease.argtypes = [c_void_p]
+        a.AXIsProcessTrustedWithOptions.restype = c_bool
+        a.AXIsProcessTrustedWithOptions.argtypes = [c_void_p]
+        cf.CFRelease.argtypes = [c_void_p]
+        cf.CFDictionaryCreate.restype = c_void_p
+        cf.CFDictionaryCreate.argtypes = [c_void_p, c_void_p, c_void_p, c_long, c_void_p, c_void_p]
+        self._source = a.CGEventSourceCreate(self.HID_STATE)
         self._lsappinfo = shutil.which("lsappinfo") or "/usr/bin/lsappinfo"
+        self._prompted = False
+
+    def _ask_for_accessibility(self) -> None:
+        """Show macOS's own "allow Accessibility" prompt once, which also adds the
+        terminal app to the list in System Settings so the user only flips a switch."""
+        ct, a, cf = self._ct, self._app, self._cf
+        try:
+            key = ct.c_void_p.in_dll(a, "kAXTrustedCheckOptionPrompt")
+            true = ct.c_void_p.in_dll(cf, "kCFBooleanTrue")
+            keys = (ct.c_void_p * 1)(key.value)
+            values = (ct.c_void_p * 1)(true.value)
+            options = cf.CFDictionaryCreate(
+                None, keys, values, 1,
+                ct.addressof(ct.c_char.in_dll(cf, "kCFTypeDictionaryKeyCallBacks")),
+                ct.addressof(ct.c_char.in_dll(cf, "kCFTypeDictionaryValueCallBacks")))
+            if options:
+                a.AXIsProcessTrustedWithOptions(options)
+                cf.CFRelease(options)
+        except (ValueError, OSError) as exc:
+            log.debug("Accessibility prompt unavailable: %s", exc)
 
     def problem(self) -> str | None:
-        if not self._app.AXIsProcessTrusted():
-            return ("macOS blocks the Shift nudge until you allow it: System Settings > "
-                    "Privacy & Security > Accessibility, turn on the app running the bridge "
-                    "(e.g. Terminal), then restart the bridge.")
-        return None
+        if self._app.AXIsProcessTrusted():
+            return None
+        if not self._prompted:
+            self._prompted = True
+            self._ask_for_accessibility()
+        return ("macOS blocks the Shift nudge until you allow it: System Settings > "
+                "Privacy & Security > Accessibility, turn on the app running the bridge "
+                "(e.g. Terminal). The bridge starts nudging as soon as you do.")
 
-    def fgu_is_foreground(self) -> bool:
+    def front_app(self) -> str:
         try:
             front = subprocess.run([self._lsappinfo, "front"], capture_output=True, text=True, timeout=2).stdout.strip()
             if not front:
-                return False
+                return ""
             info = subprocess.run([self._lsappinfo, "info", "-only", "name", front],
                                   capture_output=True, text=True, timeout=2).stdout
         except (OSError, subprocess.SubprocessError):
-            return False
+            return ""
         # Output looks like: "LSDisplayName"="FantasyGrounds"
-        _, _, value = info.partition("=")
-        return is_fgu_name(value)
+        return info.partition("=")[2].strip().strip('"')
+
+    def fgu_is_foreground(self) -> bool:
+        return is_fgu_name(self.front_app())
 
     def post_background_nudge(self) -> bool:
         return False
@@ -184,13 +227,16 @@ class MacBackend:
         return bool(self._app.CGEventSourceFlagsState(self.COMBINED_STATE) & self.FLAG_SHIFT)
 
     def shift(self, down: bool) -> None:
-        ev = self._app.CGEventCreateKeyboardEvent(None, self.KEYCODE_SHIFT, down)
+        ev = self._app.CGEventCreateKeyboardEvent(self._source, self.KEYCODE_SHIFT, down)
         if not ev:
             return
         try:
             # Modifier keys arrive as flags-changed events, which is what Unity reads.
+            flags = self.FLAG_NONCOALESCED
+            if down:
+                flags |= self.FLAG_SHIFT | self.FLAG_DEVICE_LSHIFT
             self._app.CGEventSetType(ev, self.FLAGS_CHANGED)
-            self._app.CGEventSetFlags(ev, self.FLAG_SHIFT if down else 0)
+            self._app.CGEventSetFlags(ev, flags)
             self._app.CGEventPost(self.HID_EVENT_TAP, ev)
         finally:
             self._cf.CFRelease(ev)
@@ -205,6 +251,7 @@ class LinuxBackend:
         self._xdotool = shutil.which("xdotool")
 
     def problem(self) -> str | None:
+        self._xdotool = self._xdotool or shutil.which("xdotool")
         if not os.environ.get("DISPLAY"):
             return "No X11 display (pure Wayland?), so the Shift nudge is off."
         if not self._xdotool:
@@ -217,18 +264,21 @@ class LinuxBackend:
         except (OSError, subprocess.SubprocessError):
             return ""
 
-    def fgu_is_foreground(self) -> bool:
+    def front_app(self) -> str:
         pid = self._run("getactivewindow", "getwindowpid")
         if not pid.isdigit():
-            return False
+            return ""
         try:
-            return is_fgu_name(os.readlink(f"/proc/{pid}/exe"))
+            return os.readlink(f"/proc/{pid}/exe")
         except OSError:
             try:
                 with open(f"/proc/{pid}/comm", encoding="utf-8") as f:
-                    return is_fgu_name(f.read())
+                    return f.read().strip()
             except OSError:
-                return False
+                return ""
+
+    def fgu_is_foreground(self) -> bool:
+        return is_fgu_name(self.front_app())
 
     def post_background_nudge(self) -> bool:
         return False
@@ -265,18 +315,37 @@ class Nudger:
     def request(self) -> None:
         self.pending = True
 
+    async def wait_until_usable(self) -> None:
+        """Return once the backend can nudge. Re-checks, so e.g. granting macOS
+        Accessibility or installing xdotool takes effect without a restart."""
+        warned = None
+        while True:
+            problem = self.backend.problem()
+            if not problem:
+                if warned:
+                    log.info("Shift nudge is now available.")
+                return
+            if problem != warned:
+                log.warning("%s %s", problem, MANUAL_HINT)
+                warned = problem
+            await asyncio.sleep(PROBLEM_RECHECK_SECONDS)
+
+    async def tap(self) -> None:
+        self.backend.shift(True)
+        await asyncio.sleep(HOLD_SECONDS)
+        self.backend.shift(False)
+
     async def run(self) -> None:
         if not self.enabled:
             log.warning("Auto-nudge isn't supported here. %s", MANUAL_HINT)
             return
-        problem = self.backend.problem()
-        if problem:
-            log.warning("%s %s", problem, MANUAL_HINT)
-            return
+        await self.wait_until_usable()
         if sys.platform != "win32":
-            log.info("Shift nudge for %s is experimental. If rolls don't appear, %s",
-                     self.backend.name, MANUAL_HINT[0].lower() + MANUAL_HINT[1:])
+            log.info("Shift nudge for %s is experimental. If rolls don't appear, run the "
+                     "bridge with --test-nudge, or %s", self.backend.name,
+                     MANUAL_HINT[0].lower() + MANUAL_HINT[1:])
         waiting_logged = False
+        nudged_once = False
         while True:
             await asyncio.sleep(self.interval)
             if not self.pending:
@@ -287,12 +356,43 @@ class Nudger:
                     # Try to wake FGU in the background; keep the foreground
                     # nudge pending as a fallback (a second poll is harmless).
                     sent = self.backend.post_background_nudge()
-                    log.info("FGU not active%s; will nudge when FGU is focused.",
-                             ": sent background nudge" if sent else "")
+                    log.info("FGU not active (front app: %s)%s; will nudge when FGU is focused.",
+                             self.backend.front_app() or "unknown",
+                             ", sent background nudge" if sent else "")
                     waiting_logged = True
                 continue
             self.pending = False
-            self.backend.shift(True)
-            await asyncio.sleep(HOLD_SECONDS)
-            self.backend.shift(False)
-            log.debug("Nudged FGU")
+            await self.tap()
+            if nudged_once:
+                log.debug("Nudged FGU")
+            else:
+                log.info("Nudged FGU (tapped Shift).")
+                nudged_once = True
+
+
+async def test_nudge(seconds: int = 5) -> int:
+    """--test-nudge: check each step of the nudge and tap Shift once in FGU."""
+    n = Nudger()
+    print(f"Platform: {sys.platform}, nudge backend: {n.backend.name if n.backend else 'none'}")
+    if not n.backend:
+        print("No Shift nudge on this platform. " + MANUAL_HINT)
+        return 1
+    problem = n.backend.problem()
+    print("Permissions/tools: " + ("OK" if not problem else problem))
+    if problem:
+        return 1
+    print(f"Click into Fantasy Grounds now. Tapping Shift in {seconds} seconds...")
+    for left in range(seconds, 0, -1):
+        print(f"  {left}", flush=True)
+        await asyncio.sleep(1)
+    front = n.backend.front_app()
+    is_fgu = is_fgu_name(front)
+    print(f"Front app: {front or 'unknown'} -> {'FGU found' if is_fgu else 'NOT recognized as FGU'}")
+    if not is_fgu:
+        print("The bridge only taps Shift while FGU is the front app. If FGU WAS in front,")
+        print("please report the front app name above on GitHub.")
+        return 1
+    await n.tap()
+    print("Tapped Shift. In FGU, type /pixels: 'wake-ups' should have gone up by at least 1.")
+    print("If it didn't, FGU didn't receive the key; please report it on GitHub.")
+    return 0
