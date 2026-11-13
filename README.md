@@ -51,19 +51,29 @@ Every die type is covered by automated tests. Only d20s have been tested with ph
 
 ## Requirements
 
-- Windows 10/11 with Bluetooth LE.
+- A computer with Bluetooth LE:
+
+  | Platform | Status | Notes |
+  |---|---|---|
+  | Windows 10/11 | Tested | |
+  | macOS 12+ (Apple silicon) | **Experimental** | Allow your terminal app under Privacy & Security → **Bluetooth** and → **Accessibility**. Intel Macs: run from source. |
+  | Linux x86-64 (BlueZ) | **Experimental** | Install `xdotool` for the Shift nudge. It needs X11; on pure Wayland, tap Shift in FGU yourself after rolling. |
+
 - Fantasy Grounds Unity with one of the [supported rulesets](#supported-rulesets).
 - Pixels dice disconnected from the Pixels phone app (a die talks to one app at a time).
 
 ## Install
 
-1. From the [latest release](../../releases/latest), download
-   **`PixelsInFGU-<version>-windows.zip`** and unzip it. It contains the bridge, the extension
-   and a quick-start guide. (The two files are also attached separately.) You can check
-   them first: see [SECURITY.md](SECURITY.md).
+1. From the [latest release](../../releases/latest), download the zip for your computer
+   (**`PixelsInFGU-<version>-windows.zip`**, `-macos-arm64.zip` or `-linux-x86_64.zip`) and
+   unzip it. It contains the bridge, the extension and a quick-start guide. (The files are
+   also attached separately.) You can check them first: see [SECURITY.md](SECURITY.md).
 2. Copy `PixelsFGU.ext` into your FGU data folder's `extensions` folder.
 3. Enable **Feature: Pixels Dice** when loading your campaign.
-4. Pick up your Pixels to wake them, then run `PixelsFGU-Bridge.exe` and leave it open.
+4. Pick up your Pixels to wake them, then run the bridge and leave it open: double-click
+   `PixelsFGU-Bridge.exe` on Windows, or run `./PixelsFGU-Bridge` in a terminal on macOS/Linux.
+   On macOS the first run needs `xattr -d com.apple.quarantine PixelsFGU-Bridge` (the app
+   isn't notarized).
 
 ## Using it
 
@@ -88,12 +98,21 @@ bridge\.venv\Scripts\python bridge\pixels_bridge.py
 bridge\.venv\Scripts\python tools\package_ext.py      # builds dist\PixelsFGU.ext
 ```
 
+macOS / Linux:
+
+```sh
+python3 -m venv bridge/.venv
+bridge/.venv/bin/python -m pip install -r bridge/requirements.txt
+bridge/.venv/bin/python bridge/pixels_bridge.py       # add --data-dir if FGU's folder isn't found
+```
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development and releases, and
 [docs/protocol.md](docs/protocol.md) for how the bridge and extension talk to each other.
 
 ## Known limitations
 
-- Windows only for now; the extension itself is platform-neutral.
+- macOS and Linux support is experimental and hasn't been tried with real dice yet. Reports welcome.
+  The extension itself is the same on every platform.
 - Player clients (each player running their own bridge) should work but haven't been tested.
 - Fudge dice aren't supported.
 
