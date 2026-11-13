@@ -37,7 +37,8 @@ def is_fgu_name(name: str) -> bool:
     Windows: FantasyGrounds.exe   macOS: FantasyGrounds / "Fantasy Grounds"
     Linux:   FantasyGrounds.x86_64 (comm may be truncated to "FantasyGrounds.")
     """
-    n = os.path.basename(name.strip().strip('"')).lower().replace(" ", "")
+    # Split on both separators: os.path.basename ignores "\" outside Windows.
+    n = name.strip().strip('"').replace("\\", "/").rsplit("/", 1)[-1].lower().replace(" ", "")
     return n.startswith("fantasygrounds")
 
 
