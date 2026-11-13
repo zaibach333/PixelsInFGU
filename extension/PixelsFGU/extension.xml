@@ -6,18 +6,8 @@
 		<author>zaibach333</author>
 		<description>Roll physical Pixels smart dice and have the results count in Fantasy Grounds. Requires the PixelsFGU bridge app.</description>
 		<loadorder>60</loadorder>
-		<!-- Any CoreRPG-based ruleset whose rolls go through ActionsManager.roll and
-		     CoreRPG's manual roll window. Tested: 5E. Expected to work: the rest. -->
-		<ruleset><name>CoreRPG</name></ruleset>
-		<ruleset><name>5E</name></ruleset>
-		<ruleset><name>2E</name></ruleset>
-		<ruleset><name>3.5E</name></ruleset>
-		<ruleset><name>4E</name></ruleset>
-		<ruleset><name>PFRPG</name></ruleset>
-		<ruleset><name>PFRPG2</name></ruleset>
-		<ruleset><name>PFRPG2-Legacy</name></ruleset>
-		<ruleset><name>SFRPG</name></ruleset>
-		<ruleset><name>SFRPG2</name></ruleset>
+		<!-- No <ruleset> tags: available in every ruleset. On rulesets without CoreRPG's
+		     roll APIs (ActionsManager.roll, ManualRollManager) it switches itself off. -->
 	</properties>
 	<announcement text="Pixels Dice - type /pixels for status" font="emotefont" />
 	<base>

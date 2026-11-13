@@ -44,6 +44,11 @@ local fOriginalAddRoll = nil;
 -------------------------------------------------------------------------------
 
 function onInit()
+	-- The extension can be enabled in any ruleset; stay inert where CoreRPG isn't underneath.
+	if not (OptionsManager and OptionsManager.registerOptionData and Comm and Comm.registerSlashHandler) then
+		Debug.console("[Pixels] This ruleset isn't based on CoreRPG; Pixels Dice is disabled.");
+		return;
+	end
 	OptionsManager.registerOptionData({ sKey = "PIXELS_ENABLE", bLocal = true, sGroupRes = "option_header_pixels", sLabelRes = "option_label_PIXELS_ENABLE", tCustom = { default = "on" } });
 	OptionsManager.registerOptionData({ sKey = "PIXELS_AUTOSUBMIT", bLocal = true, sGroupRes = "option_header_pixels", sLabelRes = "option_label_PIXELS_AUTOSUBMIT", tCustom = { default = "on" } });
 	OptionsManager.registerOptionData({ sKey = "PIXELS_DIGITALFILL", bLocal = true, sGroupRes = "option_header_pixels", sLabelRes = "option_label_PIXELS_DIGITALFILL", tCustom = { default = "on" } });

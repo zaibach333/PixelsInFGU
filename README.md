@@ -34,6 +34,7 @@ fill from your dice.
 |---|---|
 | D&D 5E | Tested with physical dice |
 | CoreRPG, 2E (AD&D), 3.5E, 4E, Pathfinder 1E (PFRPG), Pathfinder 2E (PFRPG2, PFRPG2-Legacy), Starfinder (SFRPG, SFRPG2) | Should work: they use CoreRPG's standard roll pipeline, which automated tests cover. Not yet tried in a live game. |
+| Any other ruleset | The extension can be enabled everywhere. It works if the ruleset rolls through CoreRPG's `ActionsManager` and manual roll window (most do), and switches itself off if those are missing. |
 
 If you play one of the untested rulesets, a quick report (works, or doesn't) helps a lot.
 

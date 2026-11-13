@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The extension can be enabled in any ruleset, not just the listed d20 ones. It switches itself
+  off where CoreRPG's roll APIs are missing.
+
 ## 0.2.0
 
 - **Experimental macOS and Linux support** for the bridge. Releases now include builds for
