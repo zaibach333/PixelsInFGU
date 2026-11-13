@@ -3,6 +3,7 @@
 Bridge binaries it looks for (any that exist get a bundle; at least one is required):
   dist/PixelsFGU-Bridge.exe                 Windows
   dist/PixelsFGU-Bridge-macos-arm64         macOS, Apple silicon (experimental)
+  dist/PixelsFGU-Bridge-macos-x86_64        macOS, Intel (experimental)
   dist/PixelsFGU-Bridge-linux-x86_64        Linux x86-64 (experimental)
 
 Produces:
@@ -44,6 +45,13 @@ PLATFORMS = [
              "Double-click PixelsFGU-Bridge.exe"),
     Platform("macos-arm64", "PixelsFGU-Bridge-macos-arm64", "PixelsFGU-Bridge",
              "macOS 12+ on Apple silicon", True,
+             "In Terminal, cd to this folder and run: ./PixelsFGU-Bridge\n"
+             "   First run: if macOS says it can't be opened, run\n"
+             "     xattr -d com.apple.quarantine PixelsFGU-Bridge\n"
+             "   and allow Terminal under System Settings > Privacy & Security >\n"
+             "   Bluetooth and > Accessibility (the second lets it tap Shift for FGU)"),
+    Platform("macos-x86_64", "PixelsFGU-Bridge-macos-x86_64", "PixelsFGU-Bridge",
+             "macOS 12+ on Intel", True,
              "In Terminal, cd to this folder and run: ./PixelsFGU-Bridge\n"
              "   First run: if macOS says it can't be opened, run\n"
              "     xattr -d com.apple.quarantine PixelsFGU-Bridge\n"

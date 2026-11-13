@@ -3,7 +3,7 @@
 ## Unreleased
 
 - **Experimental macOS and Linux support** for the bridge. Releases now include builds for
-  Windows, macOS (Apple silicon) and Linux (x86-64).
+  Windows, macOS (Apple silicon and Intel) and Linux (x86-64).
   - macOS: Shift nudge via CoreGraphics (needs Accessibility permission); finds FGU's
     data folder at `~/SmiteWorks/Fantasy Grounds`.
   - Linux: Shift nudge via `xdotool` on X11; data folder `~/.smiteworks/fgdata`.

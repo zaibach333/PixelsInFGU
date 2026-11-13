@@ -56,7 +56,7 @@ Every die type is covered by automated tests. Only d20s have been tested with ph
   | Platform | Status | Notes |
   |---|---|---|
   | Windows 10/11 | Tested | |
-  | macOS 12+ (Apple silicon) | **Experimental** | Allow your terminal app under Privacy & Security → **Bluetooth** and → **Accessibility**. Intel Macs: run from source. |
+  | macOS 12+ (Apple silicon or Intel) | **Experimental** | Allow your terminal app under Privacy & Security → **Bluetooth** and → **Accessibility**. |
   | Linux x86-64 (BlueZ) | **Experimental** | Install `xdotool` for the Shift nudge. It needs X11; on pure Wayland, tap Shift in FGU yourself after rolling. |
 
 - Fantasy Grounds Unity with one of the [supported rulesets](#supported-rulesets).
@@ -65,7 +65,8 @@ Every die type is covered by automated tests. Only d20s have been tested with ph
 ## Install
 
 1. From the [latest release](../../releases/latest), download the zip for your computer
-   (**`PixelsInFGU-<version>-windows.zip`**, `-macos-arm64.zip` or `-linux-x86_64.zip`) and
+   (**`PixelsInFGU-<version>-windows.zip`**, `-macos-arm64.zip` for Apple silicon,
+   `-macos-x86_64.zip` for Intel Macs, or `-linux-x86_64.zip`) and
    unzip it. It contains the bridge, the extension and a quick-start guide. (The files are
    also attached separately.) You can check them first: see [SECURITY.md](SECURITY.md).
 2. Copy `PixelsFGU.ext` into your FGU data folder's `extensions` folder.

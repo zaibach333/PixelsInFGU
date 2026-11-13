@@ -24,6 +24,9 @@ jobs:
           - os: macos-latest          # Apple silicon
             binary: PixelsFGU-Bridge-macos-arm64
             collect: --collect-submodules CoreBluetooth --collect-submodules libdispatch
+          - os: macos-15-intel        # Intel Macs
+            binary: PixelsFGU-Bridge-macos-x86_64
+            collect: --collect-submodules CoreBluetooth --collect-submodules libdispatch
           - os: ubuntu-22.04          # older glibc so the binary runs on more distros
             binary: PixelsFGU-Bridge-linux-x86_64
             collect: --collect-submodules dbus_fast
