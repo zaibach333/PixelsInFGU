@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 - The extension can be enabled in any ruleset, not just the listed d20 ones. It switches itself
   off where CoreRPG's roll APIs are missing.
