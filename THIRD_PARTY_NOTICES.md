@@ -31,15 +31,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## Bundled in `PixelsFGU-Bridge.exe`
+## Bundled in the bridge executables
 
-The release executable is built with PyInstaller and contains:
+Each release build of the bridge is made with PyInstaller and contains:
 
 | Component | License |
 |---|---|
 | Python runtime | PSF License |
 | [bleak](https://github.com/hbldh/bleak) | MIT |
-| [winrt (pywinrt)](https://github.com/pywinrt/pywinrt) packages | MIT |
+| [winrt (pywinrt)](https://github.com/pywinrt/pywinrt) packages (Windows build) | MIT |
+| [PyObjC](https://github.com/ronaldoussoren/pyobjc) core, CoreBluetooth and libdispatch (macOS builds) | MIT |
+| [dbus-fast](https://github.com/Bluetooth-Devices/dbus-fast) (Linux build) | MIT |
 | typing_extensions | PSF License |
 | [PyInstaller](https://pyinstaller.org) bootloader | GPL-2.0 with a bootloader exception that allows distributing the built executable under any license |
 

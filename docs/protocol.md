@@ -54,8 +54,9 @@ list no longer contains them.
 ## Waking FGU
 
 FGU's Lua has no timer, per-frame event or file watcher. After writing a roll, the bridge taps
-Shift while FGU is the foreground window. The extension polls the inbox on the global
+Shift while FGU is the foreground window (`bridge/nudge.py` has one backend per OS). Without a
+working nudge, the user tapping Shift in FGU does the same thing. The extension polls the inbox on the global
 `Input` `onShift`/`onControl`/`onAlt` events, and whenever a manual roll window opens.
 
-Any producer that writes this format can drive the extension. Examples are a future
-Pixels-app web-request receiver, or a macOS/Linux bridge.
+Any producer that writes this format can drive the extension, for example a Pixels-app
+web-request receiver.

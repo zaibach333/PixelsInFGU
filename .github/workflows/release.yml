@@ -1,8 +1,8 @@
 name: Release
 
-# Push a tag like v0.1.0 to build both artifacts from that exact commit,
-# attach SHA-256 checksums and signed build provenance, and open a DRAFT release.
-# Review the draft on GitHub, then publish it by hand.
+# Push a tag like v0.1.0 to build the bridge for Windows, macOS and Linux and the
+# extension from that exact commit, attach SHA-256 checksums and signed build
+# provenance, and open a DRAFT release. Review the draft on GitHub, then publish it by hand.
 
 on:
   push:
@@ -12,12 +12,25 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    runs-on: windows-latest
-    permissions:
-      contents: write       # create the draft release
-      id-token: write       # sign the provenance attestation
-      attestations: write   # store the attestation
+  bridge:
+    name: Bridge (${{ matrix.binary }})
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: windows-latest
+            binary: PixelsFGU-Bridge.exe
+            collect: --collect-all winrt
+          - os: macos-latest          # Apple silicon
+            binary: PixelsFGU-Bridge-macos-arm64
+            collect: --collect-submodules CoreBluetooth --collect-submodules libdispatch
+          - os: macos-15-intel        # Intel Macs
+            binary: PixelsFGU-Bridge-macos-x86_64
+            collect: --collect-submodules CoreBluetooth --collect-submodules libdispatch
+          - os: ubuntu-22.04          # older glibc so the binary runs on more distros
+            binary: PixelsFGU-Bridge-linux-x86_64
+            collect: --collect-submodules dbus_fast
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,33 +53,62 @@ jobs:
 
       - name: Build bridge executable
         working-directory: bridge
-        run: >
-          python -m PyInstaller --noconfirm --clean --onefile --name PixelsFGU-Bridge
-          --collect-submodules bleak --collect-all winrt
-          --distpath ../dist --workpath ../build --specpath ../build
-          pixels_bridge.py
+        shell: bash
+        run: |
+          name="${{ matrix.binary }}"
+          python -m PyInstaller --noconfirm --clean --onefile --name "${name%.exe}" \
+            --collect-submodules bleak ${{ matrix.collect }} \
+            --distpath ../dist --workpath ../build --specpath ../build \
+            pixels_bridge.py
+          ../dist/"$name" --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.binary }}
+          path: dist/${{ matrix.binary }}
+          if-no-files-found: error
+
+  release:
+    needs: bridge
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # create the draft release
+      id-token: write       # sign the provenance attestation
+      attestations: write   # store the attestation
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Collect bridge executables
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
 
       - name: Package extension
         run: python tools/package_ext.py
 
-      - name: Bundle, checksums and release notes
+      - name: Bundles, checksums and release notes
         run: python tools/make_release.py "${{ github.ref_name }}" "${{ github.repository }}"
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
-            dist/PixelsInFGU-*-windows.zip
-            dist/PixelsFGU-Bridge.exe
+            dist/PixelsInFGU-*.zip
+            dist/PixelsFGU-Bridge*
             dist/PixelsFGU.ext
 
       - name: Create draft release
-        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          $bundle = Get-ChildItem dist/PixelsInFGU-*-windows.zip | Select-Object -First 1
-          gh release create "$env:TAG" --draft --verify-tag --title "PixelsInFGU $env:TAG" `
-            --notes-file dist/release-notes.md `
-            $bundle.FullName dist/PixelsFGU-Bridge.exe dist/PixelsFGU.ext dist/SHA256SUMS.txt
+          gh release create "$TAG" --draft --verify-tag --title "PixelsInFGU $TAG" \
+            --notes-file dist/release-notes.md \
+            dist/PixelsInFGU-*.zip dist/PixelsFGU-Bridge* dist/PixelsFGU.ext dist/SHA256SUMS.txt

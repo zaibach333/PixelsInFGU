@@ -1,7 +1,8 @@
 """Build dist/PixelsFGU.ext deterministically.
 
-Same source -> byte-identical .ext (sorted entries, fixed timestamps, forward
-slashes), so anyone can rebuild it and compare its SHA-256 with a release.
+Same source -> byte-identical .ext on any OS or Python version (sorted entries,
+fixed timestamps and attributes, forward slashes, no compression since zlib
+builds differ), so anyone can rebuild it and compare its SHA-256 with a release.
 
     python tools/package_ext.py
 """
@@ -18,12 +19,14 @@ FIXED_TIME = (1980, 1, 1, 0, 0, 0)
 
 
 def main() -> int:
-    files = sorted(p for p in SRC.rglob("*") if p.is_file())
+    # Sort by the stored name, not Path order (which ignores case on Windows).
+    files = sorted((p for p in SRC.rglob("*") if p.is_file()), key=lambda p: p.relative_to(SRC).as_posix())
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+    with zipfile.ZipFile(OUT, "w", zipfile.ZIP_STORED) as z:
         for path in files:
             info = zipfile.ZipInfo(path.relative_to(SRC).as_posix(), FIXED_TIME)
-            info.compress_type = zipfile.ZIP_DEFLATED
+            info.compress_type = zipfile.ZIP_STORED
+            info.create_system = 3   # ZipInfo defaults to 0 on Windows, 3 elsewhere
             info.external_attr = 0o644 << 16
             z.writestr(info, path.read_bytes())
     digest = hashlib.sha256(OUT.read_bytes()).hexdigest()

@@ -45,6 +45,21 @@ LOG_FILENAME = "PixelsFGU_bridge.log"
 
 # --- FGU data folder ---------------------------------------------------------
 
+def data_dir_candidates(platform: str = sys.platform, home: Path | None = None) -> list[Path]:
+    """FGU's default data folders, most likely first.
+
+    Defaults per FGU's docs (Settings > Advanced > Data Directory). A custom
+    folder on macOS/Linux isn't discoverable; pass --data-dir for that.
+    """
+    home = home or Path.home()
+    if platform == "win32":
+        return [home / "AppData" / "Roaming" / "SmiteWorks" / "Fantasy Grounds"]
+    if platform == "darwin":
+        return [home / "SmiteWorks" / "Fantasy Grounds",
+                home / "Library" / "Application Support" / "SmiteWorks" / "Fantasy Grounds"]
+    return [home / ".smiteworks" / "fgdata"]
+
+
 def default_data_dir() -> Path | None:
     if sys.platform == "win32":
         try:
@@ -55,13 +70,7 @@ def default_data_dir() -> Path | None:
                 return Path(value)
         except OSError:
             pass
-        appdata = Path.home() / "AppData" / "Roaming" / "SmiteWorks" / "Fantasy Grounds"
-        return appdata if appdata.exists() else None
-    if sys.platform == "darwin":
-        p = Path.home() / "Library" / "Application Support" / "SmiteWorks" / "Fantasy Grounds"
-        return p if p.exists() else None
-    p = Path.home() / ".smiteworks" / "fgdata"
-    return p if p.exists() else None
+    return next((p for p in data_dir_candidates() if p.is_dir()), None)
 
 
 # --- One physical die ----------------------------------------------------------
@@ -352,6 +361,19 @@ async def run_simulator(inbox: Inbox, sim_dice: list[str]) -> None:
 def install_close_handler(inbox: Inbox) -> None:
     """Mark the bridge stopped even when the console window is closed with X."""
     if sys.platform != "win32":
+        # Closing a terminal sends SIGHUP; logout/kill send SIGTERM.
+        import signal
+
+        def on_signal(_signum, _frame):
+            try:
+                inbox.stop()
+            except Exception:  # noqa: BLE001
+                pass
+            raise KeyboardInterrupt
+
+        for name in ("SIGHUP", "SIGTERM"):
+            if hasattr(signal, name):
+                signal.signal(getattr(signal, name), on_signal)
         return
     import ctypes
     from ctypes import wintypes
@@ -396,7 +418,8 @@ def main() -> None:
 
     data_dir = args.data_dir or default_data_dir()
     if not data_dir or not Path(data_dir).exists():
-        sys.exit("Could not find the Fantasy Grounds data folder; pass --data-dir.")
+        sys.exit("Could not find the Fantasy Grounds data folder; pass --data-dir "
+                 "(FGU shows it under Settings > Data Folder).")
 
     file_log = logging.FileHandler(Path(data_dir) / LOG_FILENAME, mode="w", encoding="utf-8")
     file_log.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s", "%H:%M:%S"))

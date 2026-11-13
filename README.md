@@ -51,24 +51,38 @@ Every die type is covered by automated tests. Only d20s have been tested with ph
 
 ## Requirements
 
-- Windows 10/11 with Bluetooth LE.
+- A computer with Bluetooth LE:
+
+  | Platform | Status | Notes |
+  |---|---|---|
+  | Windows 10/11 | Tested | |
+  | macOS 12+ (Apple silicon or Intel) | **Experimental** | Allow your terminal app under Privacy & Security → **Bluetooth** and → **Accessibility**. |
+  | Linux x86-64 (BlueZ) | **Experimental** | Install `xdotool` for the Shift nudge. It needs X11; on pure Wayland, tap Shift in FGU yourself after rolling. |
+
 - Fantasy Grounds Unity with one of the [supported rulesets](#supported-rulesets).
 - Pixels dice disconnected from the Pixels phone app (a die talks to one app at a time).
 
 ## Install
 
-1. From the [latest release](../../releases/latest), download
-   **`PixelsInFGU-<version>-windows.zip`** and unzip it. It contains the bridge, the extension
-   and a quick-start guide. (The two files are also attached separately.) You can check
-   them first: see [SECURITY.md](SECURITY.md).
-2. Copy `PixelsFGU.ext` into your FGU data folder's `extensions` folder.
+1. From the [latest release](../../releases/latest), download the zip for your computer
+   (**`PixelsInFGU-<version>-windows.zip`**, `-macos-arm64.zip` for Apple silicon,
+   `-macos-x86_64.zip` for Intel Macs, or `-linux-x86_64.zip`) and
+   unzip it. It contains the bridge, the extension and a quick-start guide. (The files are
+   also attached separately.) You can check them first: see [SECURITY.md](SECURITY.md).
+2. Copy `PixelsFGU.ext` into your FGU data folder's `extensions` folder. FGU shows the data
+   folder under Settings; the defaults are `%APPDATA%\SmiteWorks\Fantasy Grounds` (Windows),
+   `~/SmiteWorks/Fantasy Grounds` (macOS) and `~/.smiteworks/fgdata` (Linux).
 3. Enable **Feature: Pixels Dice** when loading your campaign.
-4. Pick up your Pixels to wake them, then run `PixelsFGU-Bridge.exe` and leave it open.
+4. Pick up your Pixels to wake them, then run the bridge and leave it open: double-click
+   `PixelsFGU-Bridge.exe` on Windows, or run `./PixelsFGU-Bridge` in a terminal on macOS/Linux.
+   On macOS the first run needs `xattr -d com.apple.quarantine PixelsFGU-Bridge` (the app
+   isn't notarized).
 
 ## Using it
 
 - **FGU must be the active window** when a roll lands. If it isn't, the roll lands as soon
-  as you click back into FGU.
+  as you click back into FGU. If the Shift nudge can't run (see [Requirements](#requirements)),
+  tap Shift in FGU after rolling.
 - Dice that fall asleep still count as yours. The roll that wakes one is read straight from
   its Bluetooth broadcast.
 - **Options → Pixels Dice:** use physical dice, submit automatically, auto-roll dice I don't
@@ -76,7 +90,8 @@ Every die type is covered by automated tests. Only d20s have been tested with ph
 - **Chat commands:** `/pixels` (status, dice, battery), `/pixels probe` (diagnostics),
   `/pixels reset`.
 - **Bridge options:** `--list` (show dice in range), `--names Bob Amy` (only these dice),
-  `--simulate d20 d6` (no dice: type rolls like `d20 17`), `--no-blink`, `--no-nudge`, `-v`.
+  `--simulate d20 d6` (no dice: type rolls like `d20 17`), `--data-dir <folder>` (if FGU's
+  data folder isn't found automatically), `--no-blink`, `--no-nudge`, `-v`.
 - The bridge writes `PixelsFGU_bridge.log` in the FGU data folder, which is useful for bug reports.
 
 ## Run from source
@@ -88,12 +103,21 @@ bridge\.venv\Scripts\python bridge\pixels_bridge.py
 bridge\.venv\Scripts\python tools\package_ext.py      # builds dist\PixelsFGU.ext
 ```
 
+macOS / Linux:
+
+```sh
+python3 -m venv bridge/.venv
+bridge/.venv/bin/python -m pip install -r bridge/requirements.txt
+bridge/.venv/bin/python bridge/pixels_bridge.py       # add --data-dir if FGU's folder isn't found
+```
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development and releases, and
 [docs/protocol.md](docs/protocol.md) for how the bridge and extension talk to each other.
 
 ## Known limitations
 
-- Windows only for now; the extension itself is platform-neutral.
+- macOS and Linux support is experimental and hasn't been tried with real dice yet. Reports welcome.
+  The extension itself is the same on every platform.
 - Player clients (each player running their own bridge) should work but haven't been tested.
 - Fudge dice aren't supported.
 
