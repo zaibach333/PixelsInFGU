@@ -97,7 +97,7 @@ jobs:
         run: python tools/make_release.py "${{ github.ref_name }}" "${{ github.repository }}"
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             dist/PixelsInFGU-*.zip
