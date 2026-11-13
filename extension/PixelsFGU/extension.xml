@@ -2,7 +2,7 @@
 <root version="3.0">
 	<properties>
 		<name>Feature: Pixels Dice</name>
-		<version>0.1.0</version>
+		<version>0.2.0</version>
 		<author>zaibach333</author>
 		<description>Roll physical Pixels smart dice and have the results count in Fantasy Grounds. Requires the PixelsFGU bridge app.</description>
 		<loadorder>60</loadorder>

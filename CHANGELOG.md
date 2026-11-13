@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - **Experimental macOS and Linux support** for the bridge. Releases now include builds for
   Windows, macOS (Apple silicon and Intel) and Linux (x86-64).
