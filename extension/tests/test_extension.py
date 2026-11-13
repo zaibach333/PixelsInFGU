@@ -192,6 +192,17 @@ class RulesetPatterns(unittest.TestCase):
         h.E.onTabletopInit()  # must not raise
         self.assertTrue(any("disabled" in s for s in h.E.T.console.values()))
 
+    def test_inert_in_ruleset_without_corerpg(self):
+        h = Harness.__new__(Harness)
+        h.lua = LuaRuntime(unpack_returned_tuples=True)
+        h.E = h.lua.execute(STUBS.read_text(encoding="utf-8"))(h._decode_json)
+        h.E.OptionsManager = None
+        h.E.ManualRollManager = None
+        h.lua.globals().load(SCRIPT.read_text(encoding="latin-1"), "@m", "t", h.E)()
+        h.E.onInit()          # must not raise
+        h.E.onTabletopInit()  # must not raise
+        self.assertTrue(any("disabled" in s for s in h.E.T.console.values()))
+
 
 class Routing(unittest.TestCase):
     def test_unowned_dice_go_to_normal_3d_dice(self):
