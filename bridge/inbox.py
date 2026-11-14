@@ -105,6 +105,26 @@ class Inbox:
             self.on_roll()
         return roll
 
+    def add_percentile(self, pixel_name: str, tens: int, units: int) -> dict:
+        """A d00 (0..90) and a d10 face (0..9) rolled together: one d100 roll, 00+0 = 100."""
+        value = tens + units or 100
+        with self._lock:
+            self.seq += 1
+            roll = {
+                "seq": self.seq,
+                "die": "d100",
+                "value": value,
+                "face": value,
+                "pixel": pixel_name,
+                "time": round(time.time(), 3),
+            }
+            self.rolls.append(roll)
+            del self.rolls[:-MAX_ROLLS_KEPT]
+            self._write()
+        if self.on_roll:
+            self.on_roll()
+        return roll
+
     def _write(self) -> None:
         doc = {
             "version": FORMAT_VERSION,

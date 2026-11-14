@@ -24,12 +24,14 @@ import os
 import shutil
 import subprocess
 import sys
+from typing import Callable
 
 log = logging.getLogger("pixels-bridge")
 
 HOLD_SECONDS = 0.06   # several frames, so FGU sees the key state change
 MANUAL_HINT = "Tap Shift in FGU after rolling to bring the roll in."
 PROBLEM_RECHECK_SECONDS = 5.0
+CONFIRM_SECONDS = 1.5      # how long FGU gets to react to a nudge
 
 
 def is_fgu_name(name: str) -> bool:
@@ -47,6 +49,7 @@ def is_fgu_name(name: str) -> bool:
 
 class WindowsBackend:
     name = "Windows"
+    methods = ["keybd_event"]
     VK_SHIFT = 0x10
     KEYEVENTF_KEYUP = 0x0002
     WM_KEYDOWN = 0x0100
@@ -129,7 +132,7 @@ class WindowsBackend:
     def user_holding_shift(self) -> bool:
         return bool(self._user32.GetAsyncKeyState(self.VK_SHIFT) & 0x8000)
 
-    def shift(self, down: bool) -> None:
+    def shift(self, down: bool, method: str = "keybd_event") -> None:
         self._user32.keybd_event(self.VK_SHIFT, 0, 0 if down else self.KEYEVENTF_KEYUP, 0)
 
 
@@ -137,6 +140,12 @@ class WindowsBackend:
 
 class MacBackend:
     name = "macOS"
+    # Ways to deliver Shift, tried in this order until FGU confirms one (see Nudger):
+    #   hid-key      plain Shift key down/up into the HID stream (what automation tools use)
+    #   pid-key      the same events sent straight to FGU's process
+    #   session-key  plain key events into the login-session stream
+    #   hid-flags    a hand-built flags-changed event with left-Shift flags
+    methods = ["hid-key", "pid-key", "session-key", "hid-flags"]
     KEYCODE_SHIFT = 56          # kVK_Shift (left)
     FLAGS_CHANGED = 12          # kCGEventFlagsChanged
     FLAG_SHIFT = 0x00020000     # kCGEventFlagMaskShift
@@ -146,6 +155,7 @@ class MacBackend:
     FLAG_DEVICE_LSHIFT = 0x00000002   # NX_DEVICELSHIFTKEYMASK
     FLAG_NONCOALESCED = 0x00000100    # kCGEventFlagMaskNonCoalesced
     HID_EVENT_TAP = 0           # kCGHIDEventTap
+    SESSION_EVENT_TAP = 1       # kCGSessionEventTap
     COMBINED_STATE = 0          # kCGEventSourceStateCombinedSessionState
     HID_STATE = 1               # kCGEventSourceStateHIDSystemState
 
@@ -164,6 +174,7 @@ class MacBackend:
         a.CGEventSetType.argtypes = [c_void_p, c_uint32]
         a.CGEventSetFlags.argtypes = [c_void_p, c_uint64]
         a.CGEventPost.argtypes = [c_uint32, c_void_p]
+        a.CGEventPostToPid.argtypes = [c_int32, c_void_p]
         a.CGEventSourceFlagsState.restype = c_uint64
         a.CGEventSourceFlagsState.argtypes = [c_int32]
         a.AXIsProcessTrusted.restype = c_bool
@@ -175,6 +186,7 @@ class MacBackend:
         self._source = a.CGEventSourceCreate(self.HID_STATE)
         self._lsappinfo = shutil.which("lsappinfo") or "/usr/bin/lsappinfo"
         self._prompted = False
+        self._front_asn = ""
 
     def _ask_for_accessibility(self) -> None:
         """Show macOS's own "allow Accessibility" prompt once, which also adds the
@@ -208,6 +220,7 @@ class MacBackend:
     def front_app(self) -> str:
         try:
             front = subprocess.run([self._lsappinfo, "front"], capture_output=True, text=True, timeout=2).stdout.strip()
+            self._front_asn = front
             if not front:
                 return ""
             info = subprocess.run([self._lsappinfo, "info", "-only", "name", front],
@@ -226,18 +239,38 @@ class MacBackend:
     def user_holding_shift(self) -> bool:
         return bool(self._app.CGEventSourceFlagsState(self.COMBINED_STATE) & self.FLAG_SHIFT)
 
-    def shift(self, down: bool) -> None:
-        ev = self._app.CGEventCreateKeyboardEvent(self._source, self.KEYCODE_SHIFT, down)
+    def _front_pid(self) -> int | None:
+        if not self._front_asn:
+            self.front_app()
+        try:
+            out = subprocess.run([self._lsappinfo, "info", "-only", "pid", self._front_asn],
+                                 capture_output=True, text=True, timeout=2).stdout
+        except (OSError, subprocess.SubprocessError):
+            return None
+        digits = "".join(c for c in out.partition("=")[2] if c.isdigit())   # "pid"=1234
+        return int(digits) if digits else None
+
+    def shift(self, down: bool, method: str = "hid-key") -> None:
+        source = self._source if method == "hid-flags" else None
+        ev = self._app.CGEventCreateKeyboardEvent(source, self.KEYCODE_SHIFT, down)
         if not ev:
             return
         try:
-            # Modifier keys arrive as flags-changed events, which is what Unity reads.
-            flags = self.FLAG_NONCOALESCED
-            if down:
-                flags |= self.FLAG_SHIFT | self.FLAG_DEVICE_LSHIFT
-            self._app.CGEventSetType(ev, self.FLAGS_CHANGED)
-            self._app.CGEventSetFlags(ev, flags)
-            self._app.CGEventPost(self.HID_EVENT_TAP, ev)
+            if method == "hid-flags":
+                flags = self.FLAG_NONCOALESCED
+                if down:
+                    flags |= self.FLAG_SHIFT | self.FLAG_DEVICE_LSHIFT
+                self._app.CGEventSetType(ev, self.FLAGS_CHANGED)
+                self._app.CGEventSetFlags(ev, flags)
+                self._app.CGEventPost(self.HID_EVENT_TAP, ev)
+            elif method == "pid-key":
+                pid = self._front_pid()
+                if pid:
+                    self._app.CGEventPostToPid(pid, ev)
+            elif method == "session-key":
+                self._app.CGEventPost(self.SESSION_EVENT_TAP, ev)
+            else:
+                self._app.CGEventPost(self.HID_EVENT_TAP, ev)
         finally:
             self._cf.CFRelease(ev)
 
@@ -246,6 +279,7 @@ class MacBackend:
 
 class LinuxBackend:
     name = "Linux"
+    methods = ["xdotool"]
 
     def __init__(self) -> None:
         self._xdotool = shutil.which("xdotool")
@@ -286,7 +320,7 @@ class LinuxBackend:
     def user_holding_shift(self) -> bool:
         return False  # no cheap, permission-free way to read it; the tap is harmless anyway
 
-    def shift(self, down: bool) -> None:
+    def shift(self, down: bool, method: str = "xdotool") -> None:
         self._run("keydown" if down else "keyup", "Shift_L")
 
 
@@ -301,7 +335,15 @@ def make_backend(platform: str = sys.platform):
 
 
 class Nudger:
-    def __init__(self) -> None:
+    """Taps Shift in FGU after each roll.
+
+    With an extension that reports its wake-up count (in the outbox), the
+    nudger checks that each tap actually woke FGU. If a way of sending Shift
+    doesn't arrive, it moves on to the backend's next method and keeps the
+    first one that works.
+    """
+
+    def __init__(self, wakeups: Callable[[], int | None] | None = None, method: str | None = None) -> None:
         self.pending = False
         try:
             self.backend = make_backend()
@@ -311,6 +353,19 @@ class Nudger:
         self.enabled = self.backend is not None
         # Windows checks are cheap API calls; elsewhere they spawn helper processes.
         self.interval = 0.05 if sys.platform == "win32" else 0.25
+        self.wakeups = wakeups or (lambda: None)
+        self.methods = list(self.backend.methods) if self.backend else []
+        if method:
+            if method in self.methods:
+                self.methods = [method]
+            else:
+                log.warning("Unknown --nudge-method %r; choices here: %s", method, ", ".join(self.methods) or "none")
+        self.method_index = 0
+        self.checking = True        # still confirming that taps reach FGU
+
+    @property
+    def method(self) -> str:
+        return self.methods[self.method_index] if self.methods else ""
 
     def request(self) -> None:
         self.pending = True
@@ -330,22 +385,56 @@ class Nudger:
                 warned = problem
             await asyncio.sleep(PROBLEM_RECHECK_SECONDS)
 
-    async def tap(self) -> None:
-        self.backend.shift(True)
+    async def tap(self, method: str | None = None) -> None:
+        method = method or self.method
+        self.backend.shift(True, method)
         await asyncio.sleep(HOLD_SECONDS)
-        self.backend.shift(False)
+        self.backend.shift(False, method)
+
+    async def tap_and_confirm(self, method: str | None = None) -> bool | None:
+        """Tap, then watch the extension's wake-up count.
+        True: FGU woke. False: it didn't. None: can't tell (extension doesn't report)."""
+        before = self.wakeups()
+        await self.tap(method)
+        if before is None:
+            return None
+        waited = 0.0
+        while waited < CONFIRM_SECONDS:
+            await asyncio.sleep(0.1)
+            waited += 0.1
+            after = self.wakeups()
+            if after is not None and after > before:
+                return True
+        return False
+
+    def _on_result(self, reached: bool | None) -> None:
+        if reached is None:
+            # Extension too old (or outbox unreadable): keep tapping, but say so once.
+            log.info("Nudged FGU (method: %s); can't confirm it arrived - the FGU extension "
+                     "isn't reporting wake-ups.", self.method)
+            self.checking = False
+            return
+        if reached:
+            log.info("Shift nudge confirmed: FGU picked up the roll (method: %s).", self.method)
+            self.checking = False
+            return
+        log.warning("FGU didn't react to the Shift nudge (method: %s).", self.method)
+        if self.method_index + 1 < len(self.methods):
+            self.method_index += 1
+            log.info("Trying the next way of sending Shift: %s", self.method)
+            self.pending = True   # the roll still needs picking up
+        else:
+            log.warning("No way of sending Shift reached FGU. %s Please report this on GitHub "
+                        "with your OS version.", MANUAL_HINT)
+            self.method_index = 0
+            self.checking = False
 
     async def run(self) -> None:
         if not self.enabled:
             log.warning("Auto-nudge isn't supported here. %s", MANUAL_HINT)
             return
         await self.wait_until_usable()
-        if sys.platform != "win32":
-            log.info("Shift nudge for %s is experimental. If rolls don't appear, run the "
-                     "bridge with --test-nudge, or %s", self.backend.name,
-                     MANUAL_HINT[0].lower() + MANUAL_HINT[1:])
         waiting_logged = False
-        nudged_once = False
         while True:
             await asyncio.sleep(self.interval)
             if not self.pending:
@@ -362,17 +451,16 @@ class Nudger:
                     waiting_logged = True
                 continue
             self.pending = False
-            await self.tap()
-            if nudged_once:
-                log.debug("Nudged FGU")
+            if self.checking:
+                self._on_result(await self.tap_and_confirm())
             else:
-                log.info("Nudged FGU (tapped Shift).")
-                nudged_once = True
+                await self.tap()
+                log.debug("Nudged FGU (%s)", self.method)
 
 
-async def test_nudge(seconds: int = 5) -> int:
-    """--test-nudge: check each step of the nudge and tap Shift once in FGU."""
-    n = Nudger()
+async def test_nudge(outbox, method: str | None = None, seconds: int = 5) -> int:
+    """--test-nudge: check each step of the nudge and try every way of sending Shift."""
+    n = Nudger(wakeups=outbox.current_wakeups, method=method)
     print(f"Platform: {sys.platform}, nudge backend: {n.backend.name if n.backend else 'none'}")
     if not n.backend:
         print("No Shift nudge on this platform. " + MANUAL_HINT)
@@ -381,7 +469,7 @@ async def test_nudge(seconds: int = 5) -> int:
     print("Permissions/tools: " + ("OK" if not problem else problem))
     if problem:
         return 1
-    print(f"Click into Fantasy Grounds now. Tapping Shift in {seconds} seconds...")
+    print(f"Click into Fantasy Grounds now (campaign loaded, Pixels Dice enabled). Starting in {seconds} seconds...")
     for left in range(seconds, 0, -1):
         print(f"  {left}", flush=True)
         await asyncio.sleep(1)
@@ -392,7 +480,21 @@ async def test_nudge(seconds: int = 5) -> int:
         print("The bridge only taps Shift while FGU is the front app. If FGU WAS in front,")
         print("please report the front app name above on GitHub.")
         return 1
-    await n.tap()
-    print("Tapped Shift. In FGU, type /pixels: 'wake-ups' should have gone up by at least 1.")
-    print("If it didn't, FGU didn't receive the key; please report it on GitHub.")
-    return 0
+    working = []
+    for m in n.methods:
+        reached = await n.tap_and_confirm(m)
+        label = {True: "reached FGU", False: "no response", None: "sent (can't confirm)"}[reached]
+        print(f"  Shift via {m:12} {label}")
+        if reached:
+            working.append(m)
+        await asyncio.sleep(0.5)
+    if working:
+        print(f"Working: {', '.join(working)}. The bridge finds this by itself; "
+              f"to force it, use --nudge-method {working[0]}")
+        return 0
+    if n.wakeups() is None:
+        print("The FGU extension didn't report wake-ups (needs extension 0.4.0+ and a loaded campaign).")
+        print("Type /pixels in FGU: if 'wake-ups' went up, the nudge works.")
+        return 1
+    print("No way of sending Shift reached FGU. Please report this output on GitHub.")
+    return 1

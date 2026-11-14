@@ -30,6 +30,7 @@ import pixels_protocol as proto
 from inbox import Inbox, fgu_die_type
 from nudge import Nudger, test_nudge
 from outbox import OutboxWatcher
+from percentile import PercentilePairer
 from version import __version__
 
 log = logging.getLogger("pixels-bridge")
@@ -76,9 +77,10 @@ def default_data_dir() -> Path | None:
 # --- One physical die ----------------------------------------------------------
 
 class Die:
-    def __init__(self, address: str, inbox: Inbox):
+    def __init__(self, address: str, inbox: Inbox, add_roll=None):
         self.address = address
         self.inbox = inbox
+        self.add_roll = add_roll or inbox.add_roll   # usually PercentilePairer.add
         self.device = None
         self.name = address
         self.die_type = "unknown"
@@ -129,7 +131,7 @@ class Die:
         if self.last_roll and self.last_roll[0] == face and now - self.last_roll[1] < DUPLICATE_ROLL_WINDOW:
             return  # same roll reported by both the advert and the connection
         self.last_roll = (face, now)
-        roll = self.inbox.add_roll(self.name, self.die_type, face)
+        roll = self.add_roll(self.name, self.die_type, face)
         if roll:
             log.info("ROLL  %-20s %s = %s  (#%d, via %s)", self.name, roll["die"], roll["value"], roll["seq"], source)
         elif self.fgu_die is None:
@@ -238,7 +240,7 @@ def _is_pixel(adv_data) -> bool:
             or proto.SYSTEMIC_COMPANY_ID in (adv_data.manufacturer_data or {}))
 
 
-async def run_ble(inbox: Inbox, dice: dict[str, Die], name_filters: list[str]) -> None:
+async def run_ble(inbox: Inbox, dice: dict[str, Die], name_filters: list[str], add_roll=None) -> None:
     from bleak import BleakScanner
 
     loop = asyncio.get_running_loop()
@@ -254,7 +256,7 @@ async def run_ble(inbox: Inbox, dice: dict[str, Die], name_filters: list[str]) -
         if die is None:
             if name_filters and not any(f.lower() in name.lower() for f in name_filters):
                 return
-            die = Die(device.address, inbox)
+            die = Die(device.address, inbox, add_roll)
             dice[device.address] = die
             log.info("Found %s (%s), battery %s%%", name or device.address, adv.die_type, adv.battery_percent)
         die.on_advertisement(device, adv, name or None)
@@ -327,7 +329,8 @@ def sim_face(die: str, value: int | None) -> int:
     return value
 
 
-async def run_simulator(inbox: Inbox, sim_dice: list[str]) -> None:
+async def run_simulator(inbox: Inbox, sim_dice: list[str], add_roll=None) -> None:
+    add_roll = add_roll or inbox.add_roll
     for i, die in enumerate(sim_dice, 1):
         inbox.set_die(f"sim{i}", name=f"Sim {die} #{i}", die=die, pixels_type=die, battery=100,
                       connected=True, state="connected")
@@ -351,7 +354,7 @@ async def run_simulator(inbox: Inbox, sim_dice: list[str]) -> None:
         except ValueError:
             print("  value must be a number")
             continue
-        roll = inbox.add_roll("Simulated Pixel", die, sim_face(die, value))
+        roll = add_roll(f"Simulated {die}", die, sim_face(die, value))
         if roll:
             log.info("ROLL  %-20s %s = %s  (#%d)", roll["pixel"], roll["die"], roll["value"], roll["seq"])
 
@@ -402,6 +405,8 @@ def main() -> None:
     parser.add_argument("--no-nudge", action="store_true", help="don't tap Shift to wake FGU after a roll")
     parser.add_argument("--test-nudge", action="store_true",
                         help="check that the Shift nudge reaches FGU (click into FGU when asked), then exit")
+    parser.add_argument("--nudge-method", metavar="NAME",
+                        help="force one way of sending Shift (see --test-nudge); default: find one that works")
     parser.add_argument("--no-blink", action="store_true", help="don't blink dice FGU is waiting on")
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("--version", action="version", version=f"PixelsFGU bridge {__version__}")
@@ -417,8 +422,6 @@ def main() -> None:
     if args.list:
         asyncio.run(list_dice(8.0))
         return
-    if args.test_nudge:
-        sys.exit(asyncio.run(test_nudge()))
 
     data_dir = args.data_dir or default_data_dir()
     if not data_dir or not Path(data_dir).exists():
@@ -430,13 +433,20 @@ def main() -> None:
     file_log.setLevel(logging.DEBUG)
     logging.getLogger().addHandler(file_log)
 
-    nudger = Nudger()
+    outbox = OutboxWatcher(data_dir)
+    outbox.reset()
+    if args.test_nudge:
+        sys.exit(asyncio.run(test_nudge(outbox, args.nudge_method)))
+
+    nudger = Nudger(wakeups=outbox.current_wakeups, method=args.nudge_method)
     inbox = Inbox(data_dir, on_roll=None if args.no_nudge else nudger.request)
     inbox._write()
     install_close_handler(inbox)
-    outbox = OutboxWatcher(data_dir)
-    outbox.reset()
     dice: dict[str, Die] = {}
+
+    def waiting() -> list[str]:
+        outbox.poll()
+        return outbox.waiting
     log.info("PixelsFGU bridge %s - writing rolls to %s", __version__, inbox.path)
 
     if args.simulate is not None:
@@ -444,9 +454,11 @@ def main() -> None:
         bad = [d for d in sim_dice if d not in _SIM_FACES]
         if bad:
             sys.exit(f"Unknown die type(s) {bad}; use {', '.join(_SIM_FACES)}")
-        main_coro = run_simulator(inbox, sim_dice)
+        pairer = PercentilePairer(inbox, waiting, lambda: set(sim_dice))
+        main_coro = run_simulator(inbox, sim_dice, pairer.add)
     else:
-        main_coro = run_ble(inbox, dice, args.names)
+        pairer = PercentilePairer(inbox, waiting, lambda: {d.die_type for d in dice.values()})
+        main_coro = run_ble(inbox, dice, args.names, pairer.add)
 
     async def run_all():
         helpers = [asyncio.create_task(heartbeat(inbox))]

@@ -91,6 +91,8 @@ end
 function onWakeup()
 	_nWakeups = _nWakeups + 1;
 	PixelsManager.safePoll();
+	-- The outbox carries the wake-up count, so the bridge can tell its Shift nudge arrived.
+	PixelsManager.writeOutbox();
 end
 
 function safePoll()
@@ -161,11 +163,33 @@ function refreshInventory()
 	PixelsManager.updateInventory(PixelsManager.readInbox());
 end
 
+-- A d100 needs a d10: with a d00 as well, the d00 gives the tens and the d10 the
+-- units; with only a d10, the d10 is rolled twice (tens first, then units).
 function hasPhysical(sSlotDie)
 	if sSlotDie == "d100" then
-		return (_tInventory["d00"] or 0) > 0 and (_tInventory["d10"] or 0) > 0;
+		return (_tInventory["d10"] or 0) > 0;
 	end
 	return (_tInventory[sSlotDie] or 0) > 0;
+end
+
+local function ownsD00()
+	return (_tInventory["d00"] or 0) > 0;
+end
+
+-- Which half of a d100 box this die fills next: "tens", "units", or nil.
+local function percentilePart(sDie, tPart)
+	if sDie == "d00" then
+		return tPart.tens == nil and "tens" or nil;
+	end
+	if sDie ~= "d10" then
+		return nil;
+	end
+	if ownsD00() then
+		return tPart.units == nil and "units" or nil;
+	end
+	if tPart.tens == nil then return "tens"; end
+	if tPart.units == nil then return "units"; end
+	return nil;
 end
 
 function poll()
@@ -361,9 +385,9 @@ function findSlot(sDie)
 					if sPass == "exact" and sSlotDie == sDie then
 						return wEntry, wDie, "exact";
 					end
-					if sPass == "percentile" and sSlotDie == "d100" then
+					if sPass == "percentile" and sSlotDie == "d100" and PixelsManager.hasPhysical("d100") then
 						local tPart = _tPercentile[wDie] or {};
-						if (sDie == "d00" and tPart.tens == nil) or (sDie == "d10" and tPart.units == nil) then
+						if percentilePart(sDie, tPart) then
 							return wEntry, wDie, "percentile";
 						end
 					end
@@ -385,7 +409,11 @@ function handleRoll(tRoll)
 			wDie.value.setValue(nValue);
 		else
 			local tPart = _tPercentile[wDie] or {};
-			if sDie == "d00" then tPart.tens = nFace; else tPart.units = nFace; end
+			if percentilePart(sDie, tPart) == "tens" then
+				tPart.tens = (sDie == "d00") and nFace or (nFace % 10) * 10;
+			else
+				tPart.units = nFace % 10;
+			end
 			_tPercentile[wDie] = tPart;
 			if tPart.tens and tPart.units then
 				local nTotal = tPart.tens + tPart.units;
@@ -399,7 +427,13 @@ function handleRoll(tRoll)
 		return;
 	end
 
-	if sDie ~= "d00" and OptionsManager.isOption("PIXELS_FREEROLL", "on") then
+	if not OptionsManager.isOption("PIXELS_FREEROLL", "on") then
+		return;
+	end
+	if sDie == "d00" then
+		-- Half a percentile roll; the bridge pairs it with a d10 rolled at the same time.
+		ChatManager.SystemMessage(string.format("[Pixels] d00 rolled %s. Roll it together with a d10 for a d100.", tostring(nValue)));
+	else
 		PixelsManager.postFreeRoll(sDie, nValue, tRoll.pixel or "Pixel");
 	end
 end
@@ -453,7 +487,7 @@ function getWaitingDice(wSkipEntry)
 					if sDie == "d100" then
 						local tPart = _tPercentile[wDie] or {};
 						if PixelsManager.hasPhysical("d100") then
-							if tPart.tens == nil then table.insert(tWaiting, "d00"); end
+							if tPart.tens == nil then table.insert(tWaiting, ownsD00() and "d00" or "d10"); end
 							if tPart.units == nil then table.insert(tWaiting, "d10"); end
 						end
 					elseif PixelsManager.hasPhysical(sDie) then
@@ -472,7 +506,7 @@ function writeOutbox(wSkipEntry)
 	for i, sDie in ipairs(tWaiting) do
 		sOut = sOut .. (i > 1 and "," or "") .. "\"" .. sDie .. "\"";
 	end
-	sOut = sOut .. "]}";
+	sOut = sOut .. "],\"wakeups\":" .. _nWakeups .. "}";
 	if sOut == _sLastOutbox then
 		return;
 	end

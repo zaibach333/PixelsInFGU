@@ -19,6 +19,7 @@ return function(decodeJSON)
 		resolutions = {},   -- rolls passed to ActionsManager.handleResolution
 		originalRolls = {}, -- rolls passed through to the original ActionsManager.roll
 		console = {},
+		messages = {},      -- ChatManager.SystemMessage text
 	};
 	local T = E.T;
 
@@ -33,7 +34,7 @@ return function(decodeJSON)
 	E.Input = { addEventHandler = function() end };
 	E.Session = { IsHost = true };
 	E.User = { getUsername = function() return "GM"; end };
-	E.ChatManager = { SystemMessage = function() end };
+	E.ChatManager = { SystemMessage = function(s) table.insert(T.messages, s); end };
 	E.StringManager = { trim = function(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")); end };
 	E.Utility = { decodeJSON = decodeJSON };
 	E.File = {

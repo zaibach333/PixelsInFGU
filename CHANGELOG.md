@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0
+
+- **Fix: dice now blink when FGU is waiting for them.** FGU writes the outbox with a byte-order
+  mark, which the bridge couldn't read, so it never saw which dice FGU wanted.
+- **d100:** a d00 and a d10 rolled together with nothing pending now post one d100 to chat
+  (before, only the d10 showed). A lone d00 shows a hint instead of nothing. Two d10s are never
+  read as a d100.
+- **d100 with only a d10:** FGU's d100 rolls ask for the d10 twice, tens then units.
+- **macOS Shift nudge:** the bridge now tries several ways of sending Shift (including sending
+  it straight to FGU) and keeps the first one FGU confirms, using a wake-up count the extension
+  reports. `--test-nudge` lists which ways work; `--nudge-method` forces one.
+
 ## 0.3.0
 
 - The extension can be enabled in any ruleset, not just the listed d20 ones. It switches itself
