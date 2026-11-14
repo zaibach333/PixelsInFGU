@@ -409,7 +409,11 @@ class Nudger:
 
     def _on_result(self, reached: bool | None) -> None:
         if reached is None:
-            return  # extension too old to report wake-ups; just keep tapping
+            # Extension too old (or outbox unreadable): keep tapping, but say so once.
+            log.info("Nudged FGU (method: %s); can't confirm it arrived - the FGU extension "
+                     "isn't reporting wake-ups.", self.method)
+            self.checking = False
+            return
         if reached:
             log.info("Shift nudge confirmed: FGU picked up the roll (method: %s).", self.method)
             self.checking = False

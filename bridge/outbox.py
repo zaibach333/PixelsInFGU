@@ -31,7 +31,7 @@ class OutboxWatcher:
             return
         # The wake-up count is only compared before/after a nudge, so an old value is fine.
         try:
-            wakeups = json.loads(self.path.read_text(encoding="utf-8")).get("wakeups")
+            wakeups = json.loads(self.path.read_text(encoding="utf-8-sig")).get("wakeups")
             self.wakeups = wakeups if isinstance(wakeups, int) else None
         except (OSError, ValueError, AttributeError):
             pass
@@ -46,7 +46,8 @@ class OutboxWatcher:
             return False
         self._mtime = mtime
         try:
-            doc = json.loads(self.path.read_text(encoding="utf-8"))
+            # utf-8-sig: FGU's File.saveTextFile starts the file with a byte-order mark.
+            doc = json.loads(self.path.read_text(encoding="utf-8-sig"))
         except (OSError, ValueError):
             return False  # mid-write; try again next poll
         waiting = doc.get("waiting") or []

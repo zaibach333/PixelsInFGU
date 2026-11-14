@@ -96,6 +96,20 @@ class OutboxWakeupTests(unittest.TestCase):
             os.utime(path, ns=(time.time_ns(), time.time_ns() + 10_000_000))
             self.assertEqual(w.current_wakeups(), 6)
 
+    def test_reads_fgu_files_with_a_byte_order_mark(self):
+        # FGU's File.saveTextFile writes a UTF-8 BOM; it must not hide the outbox.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / OUTBOX_FILENAME
+            path.write_bytes(b'\xef\xbb\xbf{"version":1,"waiting":[],"wakeups":26}')
+            w = OutboxWatcher(Path(tmp))
+            w.reset()
+            self.assertEqual(w.wakeups, 26)
+            path.write_bytes(b'\xef\xbb\xbf{"version":1,"waiting":["d20"],"wakeups":27}')
+            import os, time
+            os.utime(path, ns=(time.time_ns(), time.time_ns() + 10_000_000))
+            self.assertTrue(w.poll())
+            self.assertEqual((w.waiting, w.wakeups), (["d20"], 27))
+
     def test_old_extension_reports_none(self):
         with tempfile.TemporaryDirectory() as tmp:
             (Path(tmp) / OUTBOX_FILENAME).write_text('{"version":1,"waiting":[]}', encoding="utf-8")
@@ -191,8 +205,7 @@ class NudgeMethodSelectionTests(unittest.TestCase):
             task.cancel()
 
         asyncio.run(go())
-        self.assertEqual(fake.used, ["a"])
-        self.assertTrue(n.checking)  # still unknown, nothing switched
+        self.assertEqual(fake.used, ["a"])   # nothing switched without a way to confirm
 
 
 if __name__ == "__main__":
