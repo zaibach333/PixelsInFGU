@@ -45,7 +45,8 @@ If you play one of the untested rulesets, a quick report (works, or doesn't) hel
 | d4, d6, d8, d12, d20 | same | |
 | d6 (pipped) | d6 | |
 | d10 | d10 | The face showing 0 counts as 10 |
-| d00 (percentile) + d10 | d100 | Needs both. Roll them in either order: 00 + 0 = 100 |
+| d00 (percentile) + d10 | d100 | Roll them together, in either order: 00 + 0 = 100. Works for FGU's d100 rolls and for rolls with nothing pending. |
+| d10 alone, for a d100 | d100 | No d00? FGU's d100 rolls ask for the d10 twice: tens first, then units. |
 | d6 Fudge | — | Not supported yet; ignored |
 
 Every die type is covered by automated tests. Only d20s have been tested with physical dice so far.
@@ -93,8 +94,8 @@ Every die type is covered by automated tests. Only d20s have been tested with ph
   `/pixels reset`.
 - **Bridge options:** `--list` (show dice in range), `--names Bob Amy` (only these dice),
   `--simulate d20 d6` (no dice: type rolls like `d20 17`), `--data-dir <folder>` (if FGU's
-  data folder isn't found automatically), `--test-nudge` (check that the Shift nudge reaches
-  FGU), `--no-blink`, `--no-nudge`, `-v`.
+  data folder isn't found automatically), `--test-nudge` (try each way of sending Shift and
+  report which reaches FGU), `--nudge-method <name>`, `--no-blink`, `--no-nudge`, `-v`.
 - The bridge writes `PixelsFGU_bridge.log` in the FGU data folder, which is useful for bug reports.
 
 ## Run from source

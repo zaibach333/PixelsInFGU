@@ -115,14 +115,62 @@ class EveryDieType(unittest.TestCase):
                 h.physical(*second)
                 self.assertEqual(h.submitted(), [[expected]])
 
-    def test_d100_without_both_dice_is_digital(self):
-        h = Harness(["d10"])   # no d00
+    def test_d100_with_only_a_d10_rolls_it_twice(self):
+        for tens_face, units_face, expected in [(7, 3, 73), (0, 5, 5), (0, 0, 100), (9, 0, 90)]:
+            with self.subTest(tens=tens_face, units=units_face):
+                h = Harness(["d10"])   # no d00
+                h.request("d100")
+                self.assertEqual(h.waiting(), ["d10", "d10"])
+                h.physical("d10", tens_face or 10, face=tens_face)    # first roll: tens
+                self.assertEqual(h.submitted(), [])
+                self.assertEqual(h.waiting(), ["d10"])
+                h.physical("d10", units_face or 10, face=units_face)  # second roll: units
+                self.assertEqual(h.submitted(), [[expected]])
+
+    def test_d10_slot_fills_before_d10_twice_percentile(self):
+        h = Harness(["d10"])
         h.request("d100", "d10")
-        values = h.pending_values()
-        self.assertTrue(1 <= values[0] <= 100)
-        self.assertEqual(values[1], 0)
-        h.physical("d10", 4)
-        self.assertEqual(h.submitted()[0][1], 4)
+        h.physical("d10", 4)                  # the plain d10 box first
+        self.assertEqual(h.pending_values(), [0, 4])
+        h.physical("d10", 6, face=6)          # then tens and units of the d100
+        h.physical("d10", 2, face=2)
+        self.assertEqual(h.submitted(), [[62, 4]])
+
+    def test_d100_with_only_a_d00_uses_fgu_dice(self):
+        h = Harness(["d00"])   # no d10: can't make the units, so FGU rolls it normally
+        h.request("d100")
+        self.assertEqual(h.submitted(), [])
+        self.assertEqual(len(list(h.T.originalRolls.values())), 1)
+
+    def test_2d10_is_never_read_as_d100(self):
+        h = Harness(["d00", "d10"])
+        h.request("d10", "d10")
+        self.assertEqual(h.waiting(), ["d10", "d10"])
+        h.physical("d10", 3)
+        h.physical("d10", 10, face=0)
+        self.assertEqual(h.submitted(), [[3, 10]])
+
+    def test_paired_d100_from_bridge_fills_a_d100_box(self):
+        h = Harness(["d00", "d10"])
+        h.request("d100")
+        h.physical("d100", 73)
+        self.assertEqual(h.submitted(), [[73]])
+
+    def test_free_d100_goes_to_chat_and_lone_d00_explains(self):
+        h = Harness(["d00", "d10"])
+        h.physical("d100", 42)
+        res = list(h.T.resolutions.values())
+        self.assertEqual(res[-1].aDice[1].type, "d100")
+        self.assertEqual(res[-1].aDice[1].result, 42)
+        h.physical("d00", 70)
+        self.assertEqual(len(list(h.T.resolutions.values())), 1)   # no chat roll for half a d100
+        self.assertTrue(any("d00 rolled 70" in m for m in h.T.messages.values()))
+
+    def test_outbox_reports_wakeups(self):
+        h = Harness(["d20"])
+        before = json.loads(h.T.outbox or '{"wakeups": 0}')["wakeups"]
+        h.E.onWakeup()
+        self.assertEqual(json.loads(h.T.outbox)["wakeups"], before + 1)
 
     def test_plain_d10_slot_wins_over_d100_units(self):
         h = Harness(["d00", "d10"])

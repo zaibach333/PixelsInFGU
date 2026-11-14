@@ -58,6 +58,7 @@ class BackendSelectionTests(unittest.TestCase):
 
         class FakeBackend:
             name = "fake"
+            methods = ["only"]
             def __init__(self):
                 self.checks = 0
                 self.keys = []
@@ -68,7 +69,7 @@ class BackendSelectionTests(unittest.TestCase):
             def fgu_is_foreground(self): return True
             def user_holding_shift(self): return False
             def post_background_nudge(self): return False
-            def shift(self, down): self.keys.append(down)
+            def shift(self, down, method): self.keys.append(down)
 
         fake = FakeBackend()
         with mock.patch("nudge.make_backend", return_value=fake), \
